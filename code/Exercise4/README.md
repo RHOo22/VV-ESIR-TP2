@@ -1,90 +1,45 @@
-# Code of your exercise
-
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.github.javaparser.ast.body.MethodDeclaration;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+ 
+public class GetterChecker {
 
-public class CodeAnalyzer {
-    public static void main(String[] commandLineArguments) {
-        if (commandLineArguments.length != 1) {
-            System.out.println("Usage: java CodeAnalyzer <path_to_source_directory>");
-            System.exit(1);
-        }
-
-        String sourceDirectoryPath = commandLineArguments[0];
-        analyzeSourceCode(sourceDirectoryPath);
-    }
-
-    private static void analyzeSourceCode(String sourcePath) {
-        List<FieldInformation> attributeList = new ArrayList<>();
+    public static void main(String[] args) {
+        // Spécifiez le chemin du fichier source Java que vous souhaitez analyser
+        //File file = new File("~/eclipse-workspace/TP_VV/commons-math/common-math-core/src/main/java~/eclipse-workspace/TP_VV/commons-math/commons-math-core/src/main/java/org/apache/commons/math4/core/jdkmath/AccurateMath.java");
+        File file = new File("~/eclipse-workspace/TP_VV/commons-math/person.java");
 
         try {
-            File sourceFolder = new File(sourcePath);
-            if (sourceFolder.isDirectory()) {
-                for (File file : Objects.requireNonNull(sourceFolder.listFiles())) {
-                    if (file.isFile() && file.getName().endsWith(".java")) {
-                        CompilationUnit cu = StaticJavaParser.parse(file);
+            // Parse le fichier source Java
+            CompilationUnit cu = StaticJavaParser.parse(file);
 
-                        cu.accept(new FieldVisitor(), attributeList);
-                    }
-                }
+            // Récupère la déclaration de classe
+            ClassOrInterfaceDeclaration classDeclaration = cu.getClassByName("Person").orElse(null);
+
+            if (classDeclaration != null) {
+                // Récupère la liste des champs de la classe
+                classDeclaration.getFields().forEach(field -> {
+                    // Récupère le nom du champ
+                    String fieldName = field.getVariable(0).getNameAsString();
+
+                    // Génère le nom du getter attendu
+                    String getterName = "get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
+
+                    // Vérifie si un getter avec le nom attendu existe
+                    boolean hasGetter = classDeclaration.getMethodsByName(getterName).stream()
+                            .anyMatch(method -> method.isMethodDeclaration() && method.asMethodDeclaration().getType().isPresent());
+
+                    // Affiche le résultat
+                    System.out.println("Le champ '" + fieldName + "' a un getter : " + hasGetter);
+                });
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        System.out.println("attributeList = " + attributeList);
-
-        generateReport(attributeList, "report.csv");
-    }
-
-    private static class FieldVisitor extends VoidVisitorAdapter<List<FieldInformation>> {
-        @Override
-        public void visit(FieldDeclaration fieldDeclaration, List<FieldInformation> fieldInformationList) {
-            super.visit(fieldDeclaration, fieldInformationList);
-
-            // Check if the attribute is private and does not have a public getter
-            if (fieldDeclaration.getModifiers().contains(Modifier.privateModifier())
-                    && !hasPublicGetter(fieldDeclaration, fieldDeclaration.getVariables().get(0).getNameAsString())) {
-
-                CompilationUnit currentCompilationUnit = fieldDeclaration.findCompilationUnit().get();
-
-                String attributeName = fieldDeclaration.getVariables().get(0).getNameAsString();
-                String declaringClass = currentCompilationUnit.getPrimaryTypeName().get();
-                String packageName = currentCompilationUnit.getPackageDeclaration().map(pd -> pd.getName().asString()).orElse("");
-
-                fieldInformationList.add(new FieldInformation(attributeName, declaringClass, packageName));
-            }
-        }
-
-        private boolean hasPublicGetter(FieldDeclaration fieldDeclaration, String attributeName) {
-            String getterName = "get" + attributeName.substring(0, 1).toUpperCase() + attributeName.substring(1);
-            return fieldDeclaration.findCompilationUnit().get().getClassByName(getterName).isPresent();
-        }
-    }
-
-    private static void generateReport(List<FieldInformation> fieldInformationList, String outputFile) {
-        try (FileWriter writer = new FileWriter(outputFile)) {
-            writer.write("Attribute,Class,Package\n");
-            for (FieldInformation fieldInformation : fieldInformationList) {
-                writer.write(fieldInformation.name + "," + fieldInformation.declaringClass + "," + fieldInformation.packageName + "\n");
-            }
-            System.out.println("The report is named: " + outputFile);
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    private record FieldInformation(String name, String declaringClass, String packageName) {
-
     }
 }
